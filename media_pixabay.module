@@ -1,0 +1,335 @@
+<?php
+
+/**
+ * @file
+ * Provides definition for Pixabay media integration.
+ *
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function media_pixabay_menu() {
+
+  $items['admin/config/media/pixabay'] = array(
+    'title' => 'Pixabay Media',
+    'description' => 'Settings for media_pixabay module',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('media_pixabay_admin'),
+    'access arguments' => array('administer media browser'),
+    'type' => MENU_NORMAL_ITEM,
+    'file' => 'media_pixabay.admin.inc',
+  );
+
+  $items['file/add/pixabay'] = array(
+    'title' => 'Pixabay',
+    'description' => 'Add images from Pixabay to your media library.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('media_pixabay_external'),
+    'access arguments' => array('access media browser'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'file_entity.pages.inc',
+    'file path' => drupal_get_path('module', 'file_entity'),
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_media_browser_plugin_info().
+ */
+function media_pixabay_media_browser_plugin_info() {
+
+  $info['pixabay'] = array(
+    'title' => t('Pixabay'),
+    'class' => 'MediaBrowserPixabay',
+    'weight' => -9,
+  );
+
+  return $info;
+}
+
+/**
+ * Implements hook_forms().
+ */
+function media_pixabay_forms($form_id, $args) {
+  $forms = array();
+
+  // Create a copy of the upload wizard form for internet media.
+  if ($form_id == 'media_pixabay_external') {
+    $forms[$form_id] = array(
+      'callback' => 'file_entity_add_upload',
+    );
+  }
+
+  return $forms;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function media_pixabay_form_file_entity_add_upload_alter(&$form, &$form_state, $form_id) {
+  $step = $form['#step'];
+  $options = $form['#options'];
+
+  // Swap the upload field for an embed field when on the first step of the web
+  // tab.
+  if ($form_id == 'media_pixabay_external' && $step == 1) {
+    unset($form['upload']);
+
+    // Add JS & CSS.
+    drupal_add_js(drupal_get_path('module', 'media_pixabay') . '/js/media_pixabay.js');
+    drupal_add_css(drupal_get_path('module', 'media_pixabay') . '/css/media_pixabay.css');
+
+    $form['external_image'] = array(
+      '#title' => t('Enter keywords'),
+      '#type' => 'textfield',
+      '#reguired' => 1,
+    );
+
+    $form['embed_code'] = array(
+      '#type' => 'textfield',
+      '#title' => t('File URL'),
+      '#description' => t('Enter a URL to a file.'),
+      '#attributes' => array('class' => array('media-add-from-url')),
+      '#maxlength' => 2083,
+      '#default_value' => isset($form_state['storage']['embed_code']) ? $form_state['storage']['embed_code'] : NULL,
+    );
+
+    $form['search'] = array(
+      '#type' => 'submit',
+      '#value' => t('Search Pixabay'),
+      '#input' => TRUE,
+      '#name' => 'op',
+      '#button_type' => 'submit',
+      '#executes_submit_callback' => FALSE,
+      '#limit_validation_errors' => FALSE,
+      '#process' => array('ajax_process_form'),
+      '#theme_wrappers' => array('button'),
+      '#ajax' => array(
+        'callback' => 'media_pixabay_external_ajax_callback',
+        'wrapper' => 'pixabay-output',
+        'event' => 'click',
+      ),
+    );
+
+    // Blank output field which we will fill using AJAX.
+    $form['output'] = array(
+      '#prefix' => '<div id="pixabay-output">',
+      '#suffix' => '</div>',
+      '#markup' => '',
+    );
+
+    // Create an array to hold potential Internet media providers.
+    $providers = array();
+
+    // Determine if there are any visible providers.
+    foreach (media_internet_get_providers() as $key => $provider) {
+      if (empty($provider['hidden']) || $provider['hidden'] != TRUE) {
+        $providers[] = check_plain($provider['title']);
+      }
+    }
+
+    $form['#validators'] = array();
+
+    if (!empty($options['types'])) {
+      $form['#validators']['media_file_validate_types'] = array($options['types']);
+    }
+
+    // Add validation and submission handlers to the form and ensure that they
+    // run first.
+    array_unshift($form['#validate'], 'media_pixabay_add_validate');
+    array_unshift($form['#submit'], 'media_pixabay_add_submit');
+  }
+}
+
+/**
+ * AJAX callback function for media_pixabay_external().
+ */
+function media_pixabay_external_ajax_callback($form, $form_state) {
+
+  // Search input.
+  $search_term = check_plain($form_state['values']['external_image']);
+
+  // Receive content.
+  $content = media_pixabay_search($search_term);
+
+  // Return ajax.
+  return array(
+    '#type' => 'ajax',
+    '#commands' => array(
+      ajax_command_html('#pixabay-output', $content),
+      array(
+        'command' => 'afterAjaxScheduleAdded',
+      )
+    ),
+  );
+}
+
+/**
+ * Main function for interaction with Pixabay API.
+ *
+ * @param string $search_term
+ *    String upon which we call pixabay api.
+ *
+ * @return string
+ *    Return HTML.
+ */
+function media_pixabay_search($search_term) {
+
+  // Pixabay API key.
+  $pixabay_api = variable_get('media_pixabay_api', "");
+
+  if (empty($pixabay_api)) {
+    return t('Please insert API key on module settings page');
+  }
+
+  // Generate API url for request.
+  $context = array(
+    'key' => $pixabay_api,
+    'q' => $search_term,
+    // Todo - maybe add to settings, include vectors? Add category filters?
+    'image_type' => 'image,illustration',
+    'per_page' => 100,
+  );
+
+  $api_url = 'https://pixabay.com/api/?';
+
+  $url = url($api_url, array('query' => $context));
+
+  // Make request.
+  $request = drupal_http_request($url);
+
+  // Get response data.
+  $json_response = drupal_json_decode($request->data);
+
+  // Set default message if no images.
+  $content = t('No pictures for current search');
+
+  // Loop trough content.
+  if (!empty($json_response['hits'])) {
+
+    // Define result as array.
+    $images = array();
+
+    foreach ($json_response['hits'] as $key => $response_data) {
+      $thumb = $response_data['previewURL'];
+      $title = $response_data['tags'];
+      $id = $response_data['id'];
+      $full = $response_data['webformatURL'];
+
+      // Get full image.
+      $download_url = str_replace('_640', '_960', $full);
+
+      $output = '<div class="media-thumbnail">';
+      $output .= '<img data-image="' . $download_url . '" src="' . $thumb . '"/>';
+      $output .= '<div class="description">' . $title . '</div>';
+      $output .= '</div>';
+
+      $images[] = $output;
+    }
+
+    // Theme as list.
+    $theme_args = array(
+      'items' => $images,
+      'type' => 'ul',
+    );
+    $content = theme('item_list', $theme_args);
+
+  }
+
+  return $content;
+
+}
+
+/**
+ * Allow stream wrappers to have their chance at validation.
+ *
+ * Any module that implements hook_media_parse will have an
+ * opportunity to validate this.
+ *
+ * @see media_parse_to_uri()
+ */
+function media_pixabay_add_validate($form, &$form_state) {
+
+  $embed_code = $form_state['values']['embed_code'];
+
+
+  if (!empty($embed_code)) {
+    try {
+      $provider = new MediaInternetFileHandler($embed_code);
+      $provider->validate();
+    }
+    catch (MediaInternetNoHandlerException $e) {
+      form_set_error('embed_code', $e->getMessage());
+      return;
+    }
+    catch (MediaInternetValidationException $e) {
+      form_set_error('embed_code', $e->getMessage());
+      return;
+    }
+
+    $validators = $form['#validators'];
+    $file = $provider->getFileObject();
+
+    if ($validators) {
+      try {
+        $file = $provider->getFileObject();
+      }
+      catch (Exception $e) {
+        form_set_error('embed_code', $e->getMessage());
+        return;
+      }
+
+      $errors = file_validate($file, $validators);
+
+      if (!empty($errors)) {
+        $message = t('%url could not be added.', array('%url' => $embed_code));
+        if (count($errors) > 1) {
+          $message .= theme('item_list', array('items' => $errors));
+        }
+        else {
+          $message .= ' ' . array_pop($errors);
+        }
+        form_set_error('embed_code', $message);
+        return FALSE;
+      }
+    }
+  }
+
+  else {
+    return FALSE;
+  }
+}
+
+/**
+ * Upload a file from a URL.
+ *
+ * This will copy a file from a remote location and store it locally.
+ *
+ * @see media_parse_to_uri()
+ * @see media_parse_to_file()
+ */
+function media_pixabay_add_submit($form, &$form_state) {
+  $embed_code = $form_state['values']['embed_code'];
+
+  if (!empty($embed_code)) {
+    try {
+      // Save the remote file.
+      $provider = new MediaInternetFileHandler($embed_code);
+      $file = $provider->save();
+    }
+    catch (Exception $e) {
+      form_set_error('embed_code', $e->getMessage());
+      return;
+    }
+
+    if (!$file->fid) {
+      form_set_error('embed_code', t('The file %file could not be saved. An unknown error has occurred.', array('%file' => $embed_code)));
+      return;
+    }
+    else {
+      $form_state['storage']['upload'] = $file->fid;
+    }
+  }
+}

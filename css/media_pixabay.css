@@ -1,0 +1,25 @@
+form#media-pixabay-external .form-item-embed-code {
+  display: none; }
+form#media-pixabay-external .form-item-external-image,
+form#media-pixabay-external input#edit-search {
+  display: inline-block; }
+
+#pixabay-output ul {
+  list-style-type: none;
+  margin: 0;
+  padding: 0; }
+  #pixabay-output ul li {
+    display: inline-block;
+    padding: 0 40px 20px 0; }
+    #pixabay-output ul li .media-thumbnail {
+      position: relative;
+      cursor: pointer; }
+      #pixabay-output ul li .media-thumbnail img {
+        vertical-align: bottom;
+        width: 100%;
+        height: auto; }
+    #pixabay-output ul li .description {
+      margin: 0;
+      padding: 5px;
+      background: #333;
+      color: #ffffff; }
