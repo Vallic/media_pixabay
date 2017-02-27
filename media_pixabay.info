@@ -5,4 +5,4 @@ core = 7.x
 
 dependencies[] = media_internet
 
-files[] = includes/MediaBrowserPixabay.inc
+files[] = includes/MediaPixabay.inc

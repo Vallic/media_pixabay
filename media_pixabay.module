@@ -3,7 +3,6 @@
 /**
  * @file
  * Provides definition for Pixabay media integration.
- *
  */
 
 /**
@@ -42,7 +41,7 @@ function media_pixabay_media_browser_plugin_info() {
 
   $info['pixabay'] = array(
     'title' => t('Pixabay'),
-    'class' => 'MediaBrowserPixabay',
+    'class' => 'MediaPixabay',
     'weight' => -9,
   );
 
@@ -161,7 +160,7 @@ function media_pixabay_external_ajax_callback($form, $form_state) {
       ajax_command_html('#pixabay-output', $content),
       array(
         'command' => 'afterAjaxScheduleAdded',
-      )
+      ),
     ),
   );
 }
@@ -253,7 +252,6 @@ function media_pixabay_search($search_term) {
 function media_pixabay_add_validate($form, &$form_state) {
 
   $embed_code = $form_state['values']['embed_code'];
-
 
   if (!empty($embed_code)) {
     try {

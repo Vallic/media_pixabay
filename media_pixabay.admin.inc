@@ -13,7 +13,7 @@ function media_pixabay_admin() {
     '#type' => 'textfield',
     '#title' => t('Pixabay API key'),
     '#default_value' => variable_get('media_pixabay_api', ""),
-    '#description' => 'Register on Pixabay.com and get your API key <a href="https://pixabay.com/api/docs/#api_rate_limit">here</a>.',
+    '#description' => t('Register on Pixabay.com and get your API key <a href="https://pixabay.com/api/docs/#api_rate_limit">here</a>.'),
     '#required' => TRUE,
   );
 
