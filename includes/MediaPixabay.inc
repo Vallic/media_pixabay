@@ -11,6 +11,7 @@
  * @deprecated
  */
 class MediaPixabay extends MediaBrowserPlugin {
+
   /**
    * Implements MediaBrowserPluginInterface::access().
    */
