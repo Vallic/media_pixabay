@@ -4,7 +4,7 @@
     attach: function (context, settings) {
 
       // Hide embed code field.
-      $('.form-item-embed-code').hide();
+      $('form#media-pixabay-external .form-item-embed-code').hide();
 
       $('img').once().bind('click', function (e) {
         var pixabay_url = $(this).attr('data-image');
