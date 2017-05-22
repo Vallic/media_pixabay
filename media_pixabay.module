@@ -253,9 +253,13 @@ function media_pixabay_add_validate($form, &$form_state) {
 
   $embed_code = $form_state['values']['embed_code'];
 
+  // See @file_entity_add_upload_submit
+  // Needed for skipping fields if is enabled and if Web tab is active.
+  $form_state['triggering_element']['#id'] = 'edit-next';
+
   if (!empty($embed_code)) {
     try {
-      $provider = new MediaInternetFileHandler($embed_code);
+      $provider = media_internet_get_provider($embed_code);
       $provider->validate();
     }
     catch (MediaInternetNoHandlerException $e) {

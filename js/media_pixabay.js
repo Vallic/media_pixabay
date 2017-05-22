@@ -5,6 +5,7 @@
 
       // Hide embed code field.
       $('form#media-pixabay-external .form-item-embed-code').hide();
+      $('form#media-pixabay-external .form-actions .form-submit').hide();
 
       $('img').once().bind('click', function (e) {
         var pixabay_url = $(this).attr('data-image');
