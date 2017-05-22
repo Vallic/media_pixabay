@@ -169,10 +169,10 @@ function media_pixabay_external_ajax_callback($form, $form_state) {
  * Main function for interaction with Pixabay API.
  *
  * @param string $search_term
- *    String upon which we call pixabay api.
+ *   String upon which we call pixabay api.
  *
  * @return string
- *    Return HTML.
+ *   Return HTML.
  */
 function media_pixabay_search($search_term) {
 

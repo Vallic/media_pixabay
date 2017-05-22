@@ -1,4 +1,5 @@
 (function ($) {
+  'use strict';
   Drupal.behaviors.media_pixabay = {
     attach: function (context, settings) {
 
