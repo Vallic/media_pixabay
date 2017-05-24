@@ -35,17 +35,18 @@ function media_pixabay_menu() {
 }
 
 /**
- * Implements hook_media_browser_plugin_info().
+ * Implements hook_theme().
  */
-function media_pixabay_media_browser_plugin_info() {
-
-  $info['pixabay'] = array(
-    'title' => t('Pixabay'),
-    'class' => 'MediaPixabay',
-    'weight' => -9,
+function media_pixabay_theme($existing, $type, $theme, $path) {
+  return array(
+    'media_pixabay_list' => array(
+      'variables' => array(
+        'images' => NULL,
+      ),
+      'template' => 'media-pixabay-list',
+      'path' => drupal_get_path('module', 'media_pixabay') . '/templates',
+    ),
   );
-
-  return $info;
 }
 
 /**
@@ -81,23 +82,22 @@ function media_pixabay_form_file_entity_add_upload_alter(&$form, &$form_state, $
     drupal_add_css(drupal_get_path('module', 'media_pixabay') . '/css/media_pixabay.css');
 
     $form['external_image'] = array(
-      '#title' => t('Enter keywords'),
       '#type' => 'textfield',
       '#reguired' => 1,
+      '#attributes' => array('placeholder' => t('Enter search term')),
     );
 
     $form['embed_code'] = array(
-      '#type' => 'textfield',
+      '#type' => 'hidden',
       '#title' => t('File URL'),
       '#description' => t('Enter a URL to a file.'),
-      '#attributes' => array('class' => array('media-add-from-url')),
       '#maxlength' => 2083,
       '#default_value' => isset($form_state['storage']['embed_code']) ? $form_state['storage']['embed_code'] : NULL,
     );
 
     $form['search'] = array(
       '#type' => 'submit',
-      '#value' => t('Search Pixabay'),
+      '#value' => t('Search'),
       '#input' => TRUE,
       '#name' => 'op',
       '#button_type' => 'submit',
@@ -138,7 +138,8 @@ function media_pixabay_form_file_entity_add_upload_alter(&$form, &$form_state, $
     // Add validation and submission handlers to the form and ensure that they
     // run first.
     array_unshift($form['#validate'], 'media_pixabay_add_validate');
-    array_unshift($form['#submit'], 'media_pixabay_add_submit');
+    array_unshift($form['#submit'], 'media_internet_add_submit');
+
   }
 }
 
@@ -153,11 +154,15 @@ function media_pixabay_external_ajax_callback($form, $form_state) {
   // Receive content.
   $content = media_pixabay_search($search_term);
 
+  $output = theme('media_pixabay_list', array(
+    'images' => $content,
+  ));
+
   // Return ajax.
   return array(
     '#type' => 'ajax',
     '#commands' => array(
-      ajax_command_html('#pixabay-output', $content),
+      ajax_command_html('#pixabay-output', $output),
       array(
         'command' => 'afterAjaxScheduleAdded',
       ),
@@ -183,58 +188,78 @@ function media_pixabay_search($search_term) {
     return t('Please insert API key on module settings page');
   }
 
-  // Generate API url for request.
-  $context = array(
-    'key' => $pixabay_api,
-    'q' => $search_term,
-    // Todo - maybe add to settings, include vectors? Add category filters?
-    'image_type' => 'image,illustration',
-    'per_page' => 100,
-  );
+  $cid = 'media:pixabay:' . $search_term;
 
-  $api_url = 'https://pixabay.com/api/?';
+  // If a cached entry exists, return it.
+  if ($cached = cache_get($cid)) {
+    $content = $cached->data;
+  }
 
-  $url = url($api_url, array('query' => $context));
+  else {
+    // Generate API url for request.
+    $context = array(
+      'key' => $pixabay_api,
+      'q' => $search_term,
+      // Todo - maybe add to settings, include vectors? Add category filters?
+      'image_type' => 'image,illustration',
+      'per_page' => 100,
+    );
 
-  // Make request.
-  $request = drupal_http_request($url);
+    $api_url = 'https://pixabay.com/api/?';
 
-  // Get response data.
-  $json_response = drupal_json_decode($request->data);
+    $url = url($api_url, array('query' => $context));
 
-  // Set default message if no images.
-  $content = t('No pictures for current search');
+    // Make request.
+    $request = drupal_http_request($url);
 
-  // Loop trough content.
-  if (!empty($json_response['hits'])) {
+    // If response is valid.
+    if ($request->code == 200) {
 
-    // Define result as array.
-    $images = array();
+      // Get response data.
+      $json_response = drupal_json_decode($request->data);
 
-    foreach ($json_response['hits'] as $key => $response_data) {
-      $thumb = $response_data['previewURL'];
-      $title = $response_data['tags'];
-      $id = $response_data['id'];
-      $full = $response_data['webformatURL'];
+      // Set default message if no images.
+      $content = t('No pictures for current search');
 
-      // Get full image.
-      $download_url = str_replace('_640', '_960', $full);
+      // Loop trough content.
+      if (!empty($json_response['hits'])) {
 
-      $output = '<div class="media-thumbnail">';
-      $output .= '<img data-image="' . $download_url . '" src="' . $thumb . '"/>';
-      $output .= '<div class="description">' . $title . '</div>';
-      $output .= '</div>';
+        // Define result as array.
+        $images = array();
 
-      $images[] = $output;
+        foreach ($json_response['hits'] as $key => $response_data) {
+          $thumb = $response_data['previewURL'];
+          $title = $response_data['tags'];
+          $id = $response_data['id'];
+          $full = $response_data['webformatURL'];
+
+          // Get full image.
+          $download_url = str_replace('_640', '_960', $full);
+
+          $output = '<div class="media-thumbnail">';
+          $output .= '<img class="pixabay" data-image="' . $download_url . '" src="' . $thumb . '"/>';
+          $output .= '<div class="description">' . $title . '</div>';
+          $output .= '</div>';
+
+          $images[] = array(
+            'download' => $download_url,
+            'thumb' => $thumb,
+            'title' => $title,
+          );
+        }
+
+        $content = $images;
+
+        // Set cache to three minutes, respect Pixabay rules.
+        cache_set($cid, $content, 'cache', time() + 180);
+
+      }
     }
 
-    // Theme as list.
-    $theme_args = array(
-      'items' => $images,
-      'type' => 'ul',
-    );
-    $content = theme('item_list', $theme_args);
-
+    else {
+      // Print error message from Pixabay API.
+      $content = $request->data;
+    }
   }
 
   return $content;
@@ -301,37 +326,5 @@ function media_pixabay_add_validate($form, &$form_state) {
 
   else {
     return FALSE;
-  }
-}
-
-/**
- * Upload a file from a URL.
- *
- * This will copy a file from a remote location and store it locally.
- *
- * @see media_parse_to_uri()
- * @see media_parse_to_file()
- */
-function media_pixabay_add_submit($form, &$form_state) {
-  $embed_code = $form_state['values']['embed_code'];
-
-  if (!empty($embed_code)) {
-    try {
-      // Save the remote file.
-      $provider = new MediaInternetFileHandler($embed_code);
-      $file = $provider->save();
-    }
-    catch (Exception $e) {
-      form_set_error('embed_code', $e->getMessage());
-      return;
-    }
-
-    if (!$file->fid) {
-      form_set_error('embed_code', t('The file %file could not be saved. An unknown error has occurred.', array('%file' => $embed_code)));
-      return;
-    }
-    else {
-      $form_state['storage']['upload'] = $file->fid;
-    }
   }
 }

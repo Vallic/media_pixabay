@@ -3,11 +3,10 @@
   Drupal.behaviors.media_pixabay = {
     attach: function (context, settings) {
 
-      // Hide embed code field.
-      $('form#media-pixabay-external .form-item-embed-code').hide();
+      // Hide submit button.
       $('form#media-pixabay-external .form-actions .form-submit').hide();
 
-      $('img').once().bind('click', function (e) {
+      $('img.pixabay').once().bind('click', function (e) {
         var pixabay_url = $(this).attr('data-image');
 
         $('input[name="embed_code"]').val(pixabay_url);
