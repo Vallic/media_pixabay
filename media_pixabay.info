@@ -7,3 +7,5 @@ dependencies[] = media
 dependencies[] = media_internet
 
 files[] = includes/MediaPixabay.inc
+
+configure = admin/config/media/pixabay

@@ -1,0 +1,13 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the Media: Pixabay module.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function media_pixabay_uninstall() {
+  variable_del('media_pixabay_api');
+}
